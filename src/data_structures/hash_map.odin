@@ -2,6 +2,7 @@ package data_structures
 import "core:fmt"
 import "core:mem"
 import "core:mem/virtual"
+//import "memory"
 
 Key :: union {
 	i64,
@@ -11,41 +12,40 @@ Key :: union {
 //TODO: 1. implement all the functions of a hash map including resize
 //resize should be based on the linked list of memory blocks in the growing arena.
 //	2. study row and column based data layout in the database internals book.
-//check if there is prospect for utilising pages and layout for parallelism(ryan fleury).
-HashPool: virtual.Arena
+//check if there is prospect for utilising pages and layout for parallelism(ryan 
 
-HashMap :: struct {
-	entries:  []HashEntry,
+HashMap :: struct(value_t: typeid) {
+	entries:  []HashEntry(typeid),
 	capacity: int,
 	size:     int,
 }
 
-HashEntry :: struct {
+HashEntry :: struct($value_t: typeid) {
 	key:   Key,
-	value: i64,
+	value: value_t,
 	psl:   int,
 	used:  bool,
 }
 
+@(require_results)
+Hash_map_init :: proc($T: typeid, initial: int) -> (HashMap(typeid), ^T) {
 
-hash_map_init :: proc() -> HashMap {
-	//reserve and allocate memory
-	if error := virtual.arena_init_growing(&HashPool, 1 * mem.Gigabyte);
-	   type_of(error) == mem.Allocator_Error {
+	Pool: virtual.Arena
+	nil_hash: HashMap(typeid)
+
+
+	if error := virtual.arena_init_growing(&Pool, 1 * mem.Gigabyte);
+	   error != mem.Allocator_Error.None {
 		fmt.println(error)
-		panic("failed to reserve memory for hashmap")
+		return nil_hash, (^T)(Pool.curr_block.base)
 	}
-	//working under the assumption that all the fields of the arena type have been initialized
-	//to the default values save for the commited memory
 
-	new_hash_map: HashMap
-	//TODO: confirm the best value for capacity to use.
-	new_hash_map.capacity = 1000
-	new_hash_map.size = 0
-	new_hash_map.entries = (HashPool.curr_block.base)
-
-	//study pages and cache locality and their effects on fetching data if any
-	//if the pages affect the fetching of data, see how to change page size for windows.
-	//set(and cast)? the pointer to our allocated memory to be the []HashEntry field in our HashMap
+	return HashMap(typeid) {
+		capacity = 1 * mem.Gigabyte / size_of(HashEntry(typeid)),
+		size = initial,
+	}, (^T)(Pool.curr_block.base)
 
 }
+
+//have an init size for the initial commit memory. e.g 1000 does 1000 * mem.size_of(HashEntry)
+//
